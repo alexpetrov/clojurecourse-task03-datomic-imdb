@@ -10,9 +10,63 @@
 (def conn (d/connect db-url))
 (defn db [] (d/db conn))
 
-;; hint: сделайте extenal id из feature :id
+;; Hint: сделайте extenal id из feature :id
 (def schema [
-  :TODO
+  [:db/add (d/tempid :db.part/user) :db/ident :series] ;; ? or better :feature.type/seriesj
+  [:db/add (d/tempid :db.part/user) :db/ident :episode]
+  [:db/add (d/tempid :db.part/user) :db/ident :movie]
+  [:db/add (d/tempid :db.part/user) :db/ident :video]
+  [:db/add (d/tempid :db.part/user) :db/ident :tv-movie]
+  [:db/add (d/tempid :db.part/user) :db/ident :videogame]
+
+  {:db/ident :feature/type
+   :db/valueType :db.type/ref
+   :db/cardinality :db.cardinality/one
+   :db/id (d/tempid :db.part/db)
+   :db.install/_attribute :db.part/db}
+
+  {:db/ident :feature/id
+   :db/valueType :db.type/string
+   :db/unique :db.unique/identity ;; I think identity here is better than value, because there is no need to have whole db unique values; This needs to use lookup ref feature
+   :db/cardinality :db.cardinality/one
+   :db/id (d/tempid :db.part/db)
+   :db.install/_attribute :db.part/db}
+
+  {:db/ident :feature/title
+   :db/valueType :db.type/string
+   :db/cardinality :db.cardinality/one
+   :db/id (d/tempid :db.part/db)
+   :db.install/_attribute :db.part/db}
+
+  {:db/ident :feature/year
+   :db/valueType :db.type/long
+   :db/cardinality :db.cardinality/one
+   :db/id (d/tempid :db.part/db)
+   :db.install/_attribute :db.part/db}
+
+  {:db/ident :feature/endyear
+   :db/valueType :db.type/long
+   :db/cardinality :db.cardinality/one
+   :db/id (d/tempid :db.part/db)
+   :db.install/_attribute :db.part/db}
+
+  {:db/ident :feature/series
+   :db/valueType :db.type/string
+   :db/cardinality :db.cardinality/one
+   :db/id (d/tempid :db.part/db)
+   :db.install/_attribute :db.part/db}
+
+  {:db/ident :feature/season
+   :db/valueType :db.type/long
+   :db/cardinality :db.cardinality/one
+   :db/id (d/tempid :db.part/db)
+   :db.install/_attribute :db.part/db}
+
+  {:db/ident :feature/episode
+   :db/valueType :db.type/long
+   :db/cardinality :db.cardinality/one
+   :db/id (d/tempid :db.part/db)
+   :db.install/_attribute :db.part/db}
 ])
 
 (defn reset []
@@ -20,8 +74,8 @@
   (d/delete-database db-url)
   (d/create-database db-url)
   (alter-var-root #'conn (constantly (d/connect db-url)))
-  @(d/transact @conn schema))
-
+  @(d/transact conn schema))
+;; (reset)
 ;; Формат файла:
 ;; { :type  =>   :series | :episode | :movie | :video | :tv-movie | :videogame
 ;;   :id    =>   str,  unique feature id
