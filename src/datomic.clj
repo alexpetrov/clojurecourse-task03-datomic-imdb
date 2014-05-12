@@ -12,7 +12,7 @@
 
 ;; Hint: сделайте extenal id из feature :id
 (def schema [
-  [:db/add (d/tempid :db.part/user) :db/ident :series] ;; ? or better :feature.type/seriesj
+  [:db/add (d/tempid :db.part/user) :db/ident :series] ;; ? or better :feature.type/series
   [:db/add (d/tempid :db.part/user) :db/ident :episode]
   [:db/add (d/tempid :db.part/user) :db/ident :movie]
   [:db/add (d/tempid :db.part/user) :db/ident :video]
@@ -91,13 +91,26 @@
   (with-open [rdr (io/reader "features.2014.edn")]
     (doseq [line (line-seq rdr)
             :let [feature (edn/read-string line)]]
-      :TODO)))
-
+      (d/transact conn [{:db/id (d/tempid :db.part/user)
+                         :feature/type (:type feature)
+                         :feature/id (:id feature)
+                         :feature/title (:title feature)
+                       ;;  :feature/year (:year feature)
+                         }]))))
+;;(import)
 ;; Найти все пары entity указанных типов с совпадающими названиями
 ;; Например, фильм + игра с одинаковым title
 ;; Вернуть #{[id1 id2], ...}
 ;; hint: data patterns
-
+;; (println (d/q '[:find ?n ?id
+;;        :where
+;;        [?n :feature/id ?id]]
+;;      (d/db conn)))
+;; (d/q '[:find ?n ?id
+;;        :where
+;;        [?n :feature/id ?id]]
+;;      (d/db conn))
+;; (println "hello datomic")
 (defn siblings [db type1 type2]
   :TODO)
 
