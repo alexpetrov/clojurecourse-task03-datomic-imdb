@@ -177,8 +177,8 @@
 (defn order-types-by-count [type1 type2]
   (let [type1-count (count-features-by-type type1)
         type2-count (count-features-by-type type2)]
-    (if (> type1-count type2-count) [type2 type1 :true]
-        [type1 type2 :false])))
+    (if (> type1-count type2-count) [type2 type1 true]
+        [type1 type2 false])))
 ;; (order-types-by-count :movie :videogame) ;; => [:videogame :movie :true]
 ;; (order-types-by-count :videogame :movie) ;; => [:videogame :movie :false]
 
@@ -186,10 +186,13 @@
 ;; (count-features-by-type :videogame) ;; => 153
 ;; (siblings (db) :videogame :movie)
 ;; (time (siblings (db) :movie :videogame))
+;;(swap-pairs-in-set #{[1 2] [2 4]}) ;; =>
+(defn swap-pairs-in-set [set]
+  #{(for [[el1 el2] set] [el2 el1])})
 
 (defn siblings [db type1 type2]
-  (let [[t1 t2 swapped?] (order-types-by-count type1 type2)]
-    (d/q '[:find ?id1 ?id2
+  (let [[t1 t2 swapped?] (order-types-by-count type1 type2)
+        result (d/q '[:find ?id1 ?id2
          :in $ ?type1 ?type2
          :where
          [?f1 :feature/type ?type1]
@@ -200,7 +203,9 @@
          [?f2 :feature/type ?type2]
          [?f1 :feature/id ?id1]
          [?f2 :feature/id ?id2]]
-       db t1 t2)))
+       db t1 t2)]
+       (if (true? swapped?) (swap-pairs-in-set result)
+           result)))
 
 ;; Найти сериал(ы) с самым ранним годом начала
 ;; Вернуть #{[id year], ...}
