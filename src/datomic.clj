@@ -160,18 +160,47 @@
 ;; (d/q '[:find ?n ?id :where [?n :feature/id ?id]] (d/db conn))
 ;; (println "hello datomic")
 ;; (siblings (d/db conn) :movie :videogame)
+
+;; (d/q '[:find (count ?t)
+;;        :where
+;;        [?f1 :feature/title ?t]
+;;        [?f2 :feature/title ?t]
+;;        [(not= ?f1 ?f2)]]
+;;  (db)) ;; => [[1405]]
+(defn count-features-by-type [type]
+  (ffirst (d/q '[:find (count ?f1)
+       :in $ ?type
+       :where
+       [?f1 :feature/type ?type]]
+               (db) type)))
+
+(defn order-types-by-count [type1 type2]
+  (let [type1-count (count-features-by-type type1)
+        type2-count (count-features-by-type type2)]
+    (if (> type1-count type2-count) [type2 type1 :true]
+        [type1 type2 :false])))
+;; (order-types-by-count :movie :videogame) ;; => [:videogame :movie :true]
+;; (order-types-by-count :videogame :movie) ;; => [:videogame :movie :false]
+
+;; (count-features-by-type :movie) ;; => 20929
+;; (count-features-by-type :videogame) ;; => 153
+;; (siblings (db) :videogame :movie)
+;; (time (siblings (db) :movie :videogame))
+
 (defn siblings [db type1 type2]
-  (d/q '[:find ?id1 ?id2
+  (let [[t1 t2 swapped?] (order-types-by-count type1 type2)]
+    (d/q '[:find ?id1 ?id2
          :in $ ?type1 ?type2
          :where
+         [?f1 :feature/type ?type1]
          [?f1 :feature/title ?t]
          [?f2 :feature/title ?t]
          [(not= ?f1 ?f2)]
-         [?f1 :feature/type ?type1]
+
          [?f2 :feature/type ?type2]
          [?f1 :feature/id ?id1]
          [?f2 :feature/id ?id2]]
-       db type1 type2))
+       db t1 t2)))
 
 ;; Найти сериал(ы) с самым ранним годом начала
 ;; Вернуть #{[id year], ...}
