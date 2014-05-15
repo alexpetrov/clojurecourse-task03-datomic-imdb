@@ -112,9 +112,7 @@
         (set-series feature)
         (set-endyear feature)
         (set-episode feature)
-        (set-season feature)
-
-)])
+        (set-season feature))])
 
 ;; (construct-feature {:type :series, :id "\"#JustDating\" (2014)", :title "#JustDating", :year 2014})
 
@@ -161,15 +159,18 @@
 
 ;; (d/q '[:find ?n ?id :where [?n :feature/id ?id]] (d/db conn))
 ;; (println "hello datomic")
-;; (siblings (db) :movie :videogame)
+;; (siblings (d/db conn) :movie :videogame)
 (defn siblings [db type1 type2]
   (d/q '[:find ?id1 ?id2
          :in $ ?type1 ?type2
          :where
-         [?id1 :feature/type ?type1]
-         [?id2 :feature/type ?type2]
-         [?id1 :feature/title ?title]
-         [?id2 :feature/title ?title]]
+         [?f1 :feature/title ?t]
+         [?f2 :feature/title ?t]
+         [(not= ?f1 ?f2)]
+         [?f1 :feature/type ?type1]
+         [?f2 :feature/type ?type2]
+         [?f1 :feature/id ?id1]
+         [?f2 :feature/id ?id2]]
        db type1 type2))
 
 ;; Найти сериал(ы) с самым ранним годом начала
