@@ -29,6 +29,13 @@
   (is (= (popular-titles (db))
          [[9 "Alone"]
           [8 "Home"]
-          [6 "Retribution"]
+          [6 "Broken"]
           [6 "Destiny"]
-          [6 "Broken"]])))
+          [6 "Retribution"]]
+         ;; [[9 "Alone"]
+         ;;  [8 "Home"]
+         ;;  [6 "Retribution"]
+         ;;  [6 "Destiny"]
+         ;;  [6 "Broken"]]
+
+)))
