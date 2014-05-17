@@ -132,7 +132,6 @@
 ;;   :episode => long, only for episode, optional. Episode number
 ;; }
 ;; hint: воспользуйтесь lookup refs чтобы ссылаться на features по внешнему :id
-;; TODO: Сделать функцию, которая будет формировать entity для feature
 (defn import []
   (with-open [rdr (io/reader "features.2014.edn")]
     (doseq [line (line-seq rdr)
@@ -144,23 +143,6 @@
 ;; Например, фильм + игра с одинаковым title
 ;; Вернуть #{[id1 id2], ...}
 ;; hint: data patterns
-;; (println (d/q '[:find (first ?n) :where [?n :feature/id "\"#JustDating\" (2014)"]] (d/db conn)))
-
-
-;; (println (d/q '[:find ?year :where [?n :feature/year ?year]] (d/db conn)))
-;; (println (d/q '[:find ?title :where [?n :feature/title ?title]] (d/db conn)))
-
-;; (println (d/q '[:find ?endyear :where [?n :feature/endyear ?endyear]] (d/db conn)))
-;; (println (d/q '[:find ?n ?series :where [?n :feature/series ?series]] (d/db conn)))
-;; (println (d/q '[:find (first ?season) :where [?n :feature/season ?season]] (d/db conn)))
-;; (println (d/q '[:find (first ?n) ?episode :where [?n :feature/episode ?episode]] (d/db conn)))
-;; (println (d/q '[:find ?n ?type ?dbident :where [?n :feature/type ?type][?type :db/ident ?dbident]] (d/db conn)))
-
-
-;; (d/q '[:find ?n ?id :where [?n :feature/id ?id]] (d/db conn))
-;; (println "hello datomic")
-;; (siblings (d/db conn) :movie :videogame)
-
 ;; (d/q '[:find (count ?t)
 ;;        :where
 ;;        [?f1 :feature/title ?t]
@@ -186,9 +168,10 @@
 ;; (count-features-by-type :videogame) ;; => 153
 ;; (siblings (db) :videogame :movie)
 ;; (time (siblings (db) :movie :videogame))
+;; (time (siblings (db) :videogame :movie))
 ;;(swap-pairs-in-set #{[1 2] [2 4]}) ;; =>
 (defn swap-pairs-in-set [set]
-  #{(for [[el1 el2] set] [el2 el1])})
+    (into #{} (map (fn [[x y]] [y x]) set)))
 
 (defn siblings [db type1 type2]
   (let [[t1 t2 swapped?] (order-types-by-count type1 type2)
@@ -204,22 +187,63 @@
          [?f1 :feature/id ?id1]
          [?f2 :feature/id ?id2]]
        db t1 t2)]
-       (if (true? swapped?) (swap-pairs-in-set result)
+    (if (true? swapped?) (swap-pairs-in-set result)
            result)))
 
+;; (entities-with-attr-val (db) :feature/id "\"Yoshiwara Uradôshin\" (2014)")
+(defn entities-with-attr-val
+"Return entities with a given attribute and value."
+   [db attr val]
+   (->> (d/datoms db :avet attr val)
+        (map :e)
+        (map (partial d/entity db))))
+
+(defn- min-year [db]
+  (-> (d/q '[:find (min ?year)
+         :where
+         [?f :feature/type :series]
+         [?f :feature/year ?year]]
+       db)
+      ffirst))
+;; (time (min-year (db)))(min-year (db))
+(defn- feature-ids-by-year [db year]
+  (-> (d/q '[:find ?id
+             :in $ ?year
+             :where
+             [?f :feature/year ?year]
+             [?f :feature/id ?id]]
+           db year)
+      identity))
+;; (time (feature-ids-by-year (db) 1952))
 ;; Найти сериал(ы) с самым ранним годом начала
 ;; Вернуть #{[id year], ...}
 ;; hint: aggregates
-
+;; (time (oldest-series (db)))
+;; (print (oldest-series (db)))
 (defn oldest-series [db]
-  :TODO)
+  (let [minyear (min-year db)
+        ids (feature-ids-by-year db minyear)]
+    (into #{} (for [[id] ids] [id minyear]))))
+
 
 ;; Найти 3 сериала с наибольшим количеством серий в сезоне
 ;; Вернуть [[id season series-count], ...]
 ;; hint: aggregates, grouping
 
 (defn longest-season [db]
-  :TODO)
+  :todo
+  #_(d/q '[:find ?series-id ?season (count ?f) ;; (max 3 (count ?f)) ;;(max 3 );;(count ?f)
+
+         :where
+         [?f :feature/type :episode]
+         [?f :feature/id ?id]
+         [?f :feature/season ?season]
+         [?f :feature/series ?series-id]
+
+]
+       db))
+;; (time (longest-season (db)))
+
 
 ;; Найти 5 самых популярных названий (:title). Названия эпизодов не учитываются
 ;; Вернуть [[count title], ...]
