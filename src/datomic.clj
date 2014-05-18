@@ -75,7 +75,6 @@
   (d/create-database db-url)
   (alter-var-root #'conn (constantly (d/connect db-url)))
   @(d/transact conn schema))
-;; (reset)
 
 (defn set-year [feature entity]
   (if (contains? feature :year)
@@ -102,12 +101,17 @@
     (assoc entity :feature/season (:season feature))
     entity))
 
+(defn set-title [feature entity]
+  (if (contains? feature :title)
+    (assoc entity :feature/title (:title feature))
+    entity))
+
 
 (defn construct-feature [feature]
   [(->> {:db/id (d/tempid :db.part/user)
         :feature/type (:type feature)
-        :feature/id (:id feature)
-        :feature/title (:title feature)}
+        :feature/id (:id feature)}
+        (set-title feature)
         (set-year feature)
         (set-series feature)
         (set-endyear feature)
@@ -132,14 +136,18 @@
 ;;   :episode => long, only for episode, optional. Episode number
 ;; }
 ;; hint: воспользуйтесь lookup refs чтобы ссылаться на features по внешнему :id
-;; TODO каким образом нужно воспользоваться lookup refs не очень понятно. Это либо очевидно и подругому сделать нельзя, или я что-то не понимаю.
+;; TODO каким образом нужно воспользоваться lookup refs не очень понятно.
+;; Это либо очевидно и подругому сделать нельзя, или я что-то не понимаю.
 (defn import []
-  (with-open [rdr (io/reader "features.2014.edn")]
-    (doseq [line (line-seq rdr)
+  (let [count-imported-features (atom 0)]
+    (with-open [rdr (io/reader "features.2014.edn")]
+      (doseq [line (line-seq rdr)
             :let [feature (edn/read-string line)]]
-      (d/transact conn (construct-feature feature)))))
-;;(reset)
-;;(import)
+        (d/transact conn (construct-feature feature))
+        (swap! count-imported-features inc)))
+    (print "Imported " @count-imported-features " features")))
+;;(time (reset))
+;;(time (import))
 ;; Найти все пары entity указанных типов с совпадающими названиями
 ;; Например, фильм + игра с одинаковым title
 ;; Вернуть #{[id1 id2], ...}
@@ -190,8 +198,9 @@
        db t1 t2)]
     (if (true? swapped?) (swap-pairs-in-set result)
            result)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; oldest-series
 
-;; (entities-with-attr-val (db) :feature/id "\"Yoshiwara Uradôshin\" (2014)")
 (defn entities-with-attr-val
 "Return entities with a given attribute and value."
    [db attr val]
@@ -226,7 +235,64 @@
         ids (feature-ids-by-year db minyear)]
     (into #{} (for [[id] ids] [id minyear]))))
 
+;; End of oldest-series
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; longest-season
+(defn get-episode-by-id [db episode-id]
+  (d/q '[:find ?]))
+
+(defn eid [db feature-id]
+  (->> (d/q '[:find ?id
+         :in $ ?feature-id
+         :where [?id :feature/id ?feature-id]]
+       db feature-id)
+       ffirst))
+
+(defn entity [db entity-id] (d/entity db (eid db entity-id)))
+(defn feature [db entity-id] (seq (entity db entity-id)))
+
+;; (entity (db) "\"Let's Ask America\" (2012) {(#2.99)}")
+;; (time (entity (db) "\"Let's Ask America\" (2012) {Valentine's Day (#2.143)}" ))
+;; (eid (db) "\"Let's Ask America\" (2012) {(#2.99)}")
+;; (eid (db) "\"Let's Ask America\" (2012) {Valentine's Day (#2.143)}")
+
+;; (time (entity (db) "\"Boonie Bears: Forest Frenzy\" (2014) {A Cure for What Ails You (#1.49)}" ))
+;; (time (feature (db) "\"Boonie Bears: Forest Frenzy\" (2014) {A Cure for What Ails You (#1.49)}" ))
+
+(defn get-episodes-by-season-in-series [db series-id]
+  (->>(d/q '[:find ?season ?episode ?series-id
+         :in $ ?series-id
+         :where
+         [?f :feature/season ?season]
+         [?f :feature/series ?series-id]
+;;         [?f :feature/id ?id]
+         [?f :feature/episode ?episode]]
+       db series-id)
+      (sort-by second >))
+  )
+
+(defn count-episodes-by-season-in-series [db series-id]
+  (d/q '[:find ?season (count ?episode) ?series-id
+         :in $ ?series-id
+         :where
+         [?f :feature/season ?season]
+         [?f :feature/series ?series-id]
+;;         [?f :feature/id ?id]
+         [?f :feature/episode ?episode]]
+       db series-id))
+;; (time (get-episodes-by-season-in-series (db)  "\"Let's Ask America\" (2012)"))
+;; (time (get-episodes-by-season-in-series (db) "\"Boonie Bears: Forest Frenzy\" (2014)" ))
+
+;; (time (count-episodes-by-season-in-series (db) "\"Boonie Bears: Forest Frenzy\" (2014)" ))
+
+(defn count-all-features [db]
+  (d/q '[:find (count ?f)
+         :where
+         [?f :feature/id]]
+       db))
+;; (time (print (count-all-features (db))));;=>43125 а строк в файле 48957
 
 (defn third [coll]
   (nth coll 2))
