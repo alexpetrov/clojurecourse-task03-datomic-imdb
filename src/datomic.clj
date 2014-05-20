@@ -137,20 +137,26 @@
 (defn order-types-by-count [db type1 type2]
   (let [type1-count (count-features-by-type db type1)
         type2-count (count-features-by-type db type2)]
-    (if (> type1-count type2-count) [type2 type1 true]
-        [type1 type2 false])))
+    (if (> type1-count type2-count) ;; [type2 type1 true]
+        [type1 type2 false]
+        [type1 type2 false]
+
+)))
 ;; (order-types-by-count :movie :videogame) ;; => [:videogame :movie :true]
 ;; (order-types-by-count :videogame :movie) ;; => [:videogame :movie :false]
 
 ;; (count-features-by-type :movie) ;; => 20929
 ;; (count-features-by-type :videogame) ;; => 153
 ;; (siblings (db) :videogame :movie)
+;; Without optimization it works: "Elapsed time: 174340.860044 msecs"
+;; With optimization it works: "Elapsed time: 1439.45947 msecs"
 ;; (time (siblings (db) :movie :videogame))
 ;; (time (siblings (db) :videogame :movie))
 ;;(swap-pairs-in-set #{[1 2] [2 4]}) ;; =>
 (defn swap-pairs-in-set [set]
     (into #{} (map (fn [[x y]] [y x]) set)))
 
+;; Optimization works, because datomic reduces value with clauses as they appears in query
 (defn siblings [db type1 type2]
   (let [[t1 t2 swapped?] (order-types-by-count db type1 type2)
         result (d/q '[:find ?id1 ?id2
@@ -159,7 +165,10 @@
          [?f1 :feature/type ?type1]
          [?f1 :feature/title ?t]
          [?f2 :feature/title ?t]
-         [(not= ?f1 ?f2)]
+;; QUESTION: I suppose, that neither first nor second clause don't make any sense in this query. Am I right?
+;; As I can see time is the same for every query.
+;;         [(not= ?f1 ?f2)]
+;;         [(> ?f1 ?f2)]
 
          [?f2 :feature/type ?type2]
          [?f1 :feature/id ?id1]
