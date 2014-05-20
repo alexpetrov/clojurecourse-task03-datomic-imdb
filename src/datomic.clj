@@ -76,54 +76,23 @@
   (alter-var-root #'conn (constantly (d/connect db-url)))
   @(d/transact conn schema))
 
-(defn set-year [feature entity]
-  (if (contains? feature :year)
-    (assoc entity :feature/year (:year feature))
-    entity))
 
-(defn set-series [feature entity]
-  (if (contains? feature :series)
-    (assoc entity :feature/series (:series feature))
-    entity))
-
-(defn set-endyear [feature entity]
-  (if (contains? feature :endyear)
-    (assoc entity :feature/endyear (:endyear feature))
-    entity))
-
-(defn set-episode [feature entity]
-  (if (contains? feature :episode)
-    (assoc entity :feature/episode (:episode feature))
-    entity))
-
-(defn set-season [feature entity]
-  (if (contains? feature :season)
-    (assoc entity :feature/season (:season feature))
-    entity))
-
-(defn set-title [feature entity]
-  (if (contains? feature :title)
-    (assoc entity :feature/title (:title feature))
-    entity))
-
-
-(defn construct-feature [feature]
-  [(->> {:db/id (d/tempid :db.part/user)
-        :feature/type (:type feature)
-        :feature/id (:id feature)}
-        (set-title feature)
-        (set-year feature)
-        (set-series feature)
-        (set-endyear feature)
-        (set-episode feature)
-        (set-season feature))])
-
-;; (construct-feature {:type :series, :id "\"#JustDating\" (2014)", :title "#JustDating", :year 2014})
-
-;; (construct-feature {:type :series, :id "\"30 for 30\" (2009)", :title "30 for 30", :year 2009, :endyear 2014})
-
-;; (construct-feature {:type :episode, :id "\"#JustDating\" (2014) {(#1.1)}", :series "\"#JustDating\" (2014)", :season 1, :episode 1, :year 2014})
-
+;; FIXME: It must be better name for this, or some more idiomatic way
+(defn- cr-attr-map [key value]
+  (if value {key value}))
+;; (cr-attr-map :a nil)
+;; (merge {:a "3"} nil)
+;; (construct-feature-new {:type :movie :id "id" :year 1923 :title "title" :endyear 2013 :series "series" :season "season" :episode "episode"})
+(defn- construct-feature [feature]
+  [(merge {:db/id (d/tempid :db.part/user)}
+         (cr-attr-map :feature/type (:type feature))
+         (cr-attr-map :feature/id (:id feature))
+         (cr-attr-map :feature/title (:title feature))
+         (cr-attr-map :feature/year (:year feature))
+         (cr-attr-map :feature/endyear (:endyear feature))
+         (cr-attr-map :feature/series (:series feature))
+         (cr-attr-map :feature/season (:season feature))
+         (cr-attr-map :feature/episode (:episode feature)))])
 
 ;; Формат файла:
 ;; { :type  =>   :series | :episode | :movie | :video | :tv-movie | :videogame
@@ -144,7 +113,7 @@
       (doseq [line (line-seq rdr)
             :let [feature (edn/read-string line)]]
         (d/transact conn (construct-feature feature))
-        (swap! count-imported-features inc)))
+         (swap! count-imported-features inc)))
     (print "Imported " @count-imported-features " features")))
 ;;(time (reset))
 ;;(time (import))
