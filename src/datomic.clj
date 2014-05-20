@@ -127,16 +127,16 @@
 ;;        [?f2 :feature/title ?t]
 ;;        [(not= ?f1 ?f2)]]
 ;;  (db)) ;; => [[1405]]
-(defn count-features-by-type [type]
+(defn count-features-by-type [db type]
   (ffirst (d/q '[:find (count ?f1)
        :in $ ?type
        :where
        [?f1 :feature/type ?type]]
-               (db) type)))
+               db type)))
 
-(defn order-types-by-count [type1 type2]
-  (let [type1-count (count-features-by-type type1)
-        type2-count (count-features-by-type type2)]
+(defn order-types-by-count [db type1 type2]
+  (let [type1-count (count-features-by-type db type1)
+        type2-count (count-features-by-type db type2)]
     (if (> type1-count type2-count) [type2 type1 true]
         [type1 type2 false])))
 ;; (order-types-by-count :movie :videogame) ;; => [:videogame :movie :true]
@@ -152,7 +152,7 @@
     (into #{} (map (fn [[x y]] [y x]) set)))
 
 (defn siblings [db type1 type2]
-  (let [[t1 t2 swapped?] (order-types-by-count type1 type2)
+  (let [[t1 t2 swapped?] (order-types-by-count db type1 type2)
         result (d/q '[:find ?id1 ?id2
          :in $ ?type1 ?type2
          :where
