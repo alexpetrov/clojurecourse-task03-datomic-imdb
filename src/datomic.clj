@@ -245,7 +245,6 @@
          :where
          [?f :feature/season ?season]
          [?f :feature/series ?series-id]
-;;         [?f :feature/id ?id]
          [?f :feature/episode ?episode]]
        db series-id)
       (sort-by second >))
@@ -257,7 +256,6 @@
          :where
          [?f :feature/season ?season]
          [?f :feature/series ?series-id]
-;;         [?f :feature/id ?id]
          [?f :feature/episode ?episode]]
        db series-id))
 ;; (time (get-episodes-by-season-in-series (db)  "\"Let's Ask America\" (2012)"))
@@ -288,9 +286,9 @@
 
 (defn longest-season [db]
   (->> (count-episodes-by-season db)
-      (sort-by third >)
-      (take 3)
-      vec))
+       (sort-by third >)
+       (take 3)
+       vec))
 ;; (time (longest-season (db)))
 
 
@@ -300,9 +298,7 @@
          [?f :feature/title ?title]
          [?f :feature/type ?type]
          [?episode :db/ident :episode]
-;;         []
-         [(not= ?type ?episode)]
-         ]
+         [(not= ?type ?episode)]]
        db))
 ;; Найти 5 самых популярных названий (:title). Названия эпизодов не учитываются
 ;; Вернуть [[count title], ...]
