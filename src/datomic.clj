@@ -12,15 +12,15 @@
 
 ;; Hint: сделайте extenal id из feature :id
 (def schema [
-  [:db/add (d/tempid :db.part/user) :db/ident :series] ;; ? or better :feature.type/series
-  [:db/add (d/tempid :db.part/user) :db/ident :episode]
-  [:db/add (d/tempid :db.part/user) :db/ident :movie]
-  [:db/add (d/tempid :db.part/user) :db/ident :video]
-  [:db/add (d/tempid :db.part/user) :db/ident :tv-movie]
-  [:db/add (d/tempid :db.part/user) :db/ident :videogame]
+  ;; [:db/add (d/tempid :db.part/user) :db/ident :series] ;; ? or better :feature.type/series
+  ;; [:db/add (d/tempid :db.part/user) :db/ident :episode]
+  ;; [:db/add (d/tempid :db.part/user) :db/ident :movie]
+  ;; [:db/add (d/tempid :db.part/user) :db/ident :video]
+  ;; [:db/add (d/tempid :db.part/user) :db/ident :tv-movie]
+  ;; [:db/add (d/tempid :db.part/user) :db/ident :videogame]
 
   {:db/ident :feature/type
-   :db/valueType :db.type/ref
+   :db/valueType :db.type/keyword
    :db/cardinality :db.cardinality/one
    :db/id (d/tempid :db.part/db)
    :db.install/_attribute :db.part/db}
@@ -87,14 +87,45 @@
 ;; feature1
 ;; (feature-series {:type :episode :id "id" :year 1923 :title "title" :endyear 2013 :series "series" :season "season" :episode "episode"})
 (defn feature-series [feature]
-  (if (= :episode (:type feature))
-    {:feature/series [:feature/id (:series feature)]}))
+  (if (and (= :episode (:type feature)) (:series feature))
+    {:feature/series [:feature/id (:series feature)]}
+    {}))
 ;; (cr-attr-map :a nil)
 ;; (merge {:a "3"} nil)
 ;; (construct-feature {:type :movie :id "id" :year 1923 :title "title" :endyear 2013 :series "series" :season "season" :episode "episode"})
 ;; (construct-feature {:type :episode :id "id" :year 1923 :title "title" :endyear 2013 :series "series" :season "season" :episode "episode"})
+;; (construct-feature {
+;;                     :type :episode
+;;                     :id "id"
+;;                     :year 1923
+;;                     :title "title"
+;;                     :endyear 2013
+;;                     :series "series"
+;;                     :season "season"
+;;                     :episode "episode"
+;;})
+
+
+;;(remove-empty-keys {:a "a" :b nil})
+(defn- remove-empty-keys [map]
+  (into {}
+        (for [[k v] map
+              :when v] [k v])))
 
 (defn- construct-feature [feature]
+  (->> {:db/id (d/tempid :db.part/user)
+        :feature/type (:type feature)
+        :feature/id (:id feature)
+        :feature/title (:title feature)
+        :feature/year (:year feature)
+        :feature/endyear (:endyear feature)
+        :feature/season (:season feature)
+        :feature/episode (:episode feature)
+        :feature/series (when-let [series (:series feature)]
+                          [:feature/id series])}
+       remove-empty-keys))
+
+(defn- construct-feature-old [feature]
   (merge {:db/id (d/tempid :db.part/user)}
          (cr-attr-map :feature/type (:type feature))
          (cr-attr-map :feature/id (:id feature))
@@ -117,19 +148,28 @@
 ;; }
 ;; hint: воспользуйтесь lookup refs чтобы ссылаться на features по внешнему :id
 
+;; TODO: I don't understand how this can work.
+;; It only can work if all episodes goes after series in data file.
+;; Otherwize there will be no series for episode when latter gonna be inserted
+(defn import-data []
+  (with-open [rdr (io/reader "features.2014.edn")]
+    (doseq [line (line-seq rdr)
+            :let [feature (edn/read-string line)]]
+      @(d/transact conn [(construct-feature feature)]))))
+
+;;(def import import-data)
+
 (defn import []
-  (let [count-imported-features (atom 0)
-        episodes []]
+  (let [episodes (atom [])]
     (with-open [rdr (io/reader "features.2014.edn")]
       (doseq [line (line-seq rdr)
             :let [feature (edn/read-string line)]
             :let [edn-feature (construct-feature feature)]]
         (if (= :episode (:feature/type edn-feature))
-          (conj episodes edn-feature)
+          (swap! episodes conj edn-feature)
           (d/transact conn [edn-feature]))
-        (swap! count-imported-features inc)))
-    (d/transact conn episodes)
-    (print "Imported " @count-imported-features " features")))
+        ))
+    (d/transact conn @episodes)))
 ;;(time (reset))
 ;;(time (import))
 ;; import with lookup ref tooks 68195 msecs
@@ -281,6 +321,9 @@
          [?f :feature/id]]
        db))
 ;; (time (print (count-all-features (db))));;=>43125 а строк в файле 48957
+;; After switch to keyword:
+;; (time (print (count-all-features (db))));;=>26765 а строк в файле 48957
+;;
 
 (defn third [coll]
   (nth coll 2))
@@ -293,6 +336,7 @@
          [?s :feature/id ?series-id]]
        db))
 ;; (print (count-episodes-by-season (db)))
+;; (time (count-episodes-by-season (db)))
 ;; Найти 3 сериала с наибольшим количеством серий в сезоне
 ;; Вернуть [[id season series-count], ...]
 ;; hint: aggregates, grouping
@@ -310,9 +354,12 @@
          :where
          [?f :feature/title ?title]
          [?f :feature/type ?type]
-         [?episode :db/ident :episode]
-         [(not= ?type ?episode)]]
+;;         [?episode :db/ident :episode]
+;;                  [(not= ?type ?episode)]
+         [(not= ?type :episode)]
+]
        db))
+;; (time (count-titles (db)))
 ;; Найти 5 самых популярных названий (:title). Названия эпизодов не учитываются
 ;; Вернуть [[count title], ...]
 ;; hint: aggregation, grouping, predicates
