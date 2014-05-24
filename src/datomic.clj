@@ -35,6 +35,7 @@
   {:db/ident :feature/title
    :db/valueType :db.type/string
    :db/cardinality :db.cardinality/one
+   :db/index true
    :db/id (d/tempid :db.part/db)
    :db.install/_attribute :db.part/db}
 
@@ -131,6 +132,9 @@
     (print "Imported " @count-imported-features " features")))
 ;;(time (reset))
 ;;(time (import))
+;; import with lookup ref tooks 68195 msecs
+;; import without lookupt ref tooks 139109 msecs (x2)
+;; with index on title ti tooks 65421.360474 msecs. The same as without index
 ;; (let [episodes (atom [])]
 ;;   (swap! episodes conj 1)
 ;;   (swap! episodes conj 2)
@@ -166,32 +170,27 @@
 ;; (siblings (db) :videogame :movie)
 ;; Without optimization it works: "Elapsed time: 174340.860044 msecs"
 ;; With optimization it works: "Elapsed time: 1439.45947 msecs"
-;; (time (siblings (db) :movie :videogame))
-;; (time (siblings (db) :videogame :movie))
+;; (time (siblings (db) :movie :videogame)) ;; Without index on title it tooks 558.02497
+;; (time (siblings (db) :videogame :movie)) ;; Without index on title it tooks 556.408679 msecs
+;; ~600 msecs when first where clause is by type
+;; 431.118163 msecs when first where clause is by title
+;; 87490.714955 msecs :movie :videogame without index
 ;;(swap-pairs-in-set #{[1 2] [2 4]}) ;; =>
 (defn swap-pairs-in-set [set]
     (into #{} (map (fn [[x y]] [y x]) set)))
 
 ;; Optimization works, because datomic reduces value with clauses as they appears in query
 (defn siblings [db type1 type2]
-  (let [[t1 t2 swapped?] (order-types-by-count db type1 type2)
-        result (d/q '[:find ?id1 ?id2
+  (d/q '[:find ?id1 ?id2
          :in $ ?type1 ?type2
          :where
-         [?f1 :feature/type ?type1]
          [?f1 :feature/title ?t]
          [?f2 :feature/title ?t]
-;; QUESTION: I suppose, that neither first nor second clause don't make any sense in this query. Am I right?
-;; As I can see time is the same for every query.
-;;         [(not= ?f1 ?f2)]
-;;         [(> ?f1 ?f2)]
-
+         [?f1 :feature/type ?type1]
          [?f2 :feature/type ?type2]
          [?f1 :feature/id ?id1]
          [?f2 :feature/id ?id2]]
-       db t1 t2)]
-    (if (true? swapped?) (swap-pairs-in-set result)
-           result)))
+       db type1 type2))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; oldest-series
 
@@ -324,4 +323,4 @@
       (take 5)
       vec))
 
-;;(time (popular-titles (db)))
+;;(time (popular-titles (db))) ;; without index on title it tooks 605.346835 msecs
