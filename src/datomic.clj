@@ -51,7 +51,7 @@
    :db.install/_attribute :db.part/db}
 
   {:db/ident :feature/series
-   :db/valueType :db.type/string
+   :db/valueType :db.type/ref
    :db/cardinality :db.cardinality/one
    :db/id (d/tempid :db.part/db)
    :db.install/_attribute :db.part/db}
@@ -80,19 +80,29 @@
 ;; FIXME: It must be better name for this, or some more idiomatic way
 (defn- cr-attr-map [key value]
   (if value {key value}))
+
+;; (def feature1 {:type :episode :id "id" :year 1923 :title "title" :endyear 2013 :series "series" :season "season" :episode "episode"})
+;; (:type )
+;; feature1
+;; (feature-series {:type :episode :id "id" :year 1923 :title "title" :endyear 2013 :series "series" :season "season" :episode "episode"})
+(defn feature-series [feature]
+  (if (= :episode (:type feature))
+    {:feature/series [:feature/id (:series feature)]}))
 ;; (cr-attr-map :a nil)
 ;; (merge {:a "3"} nil)
-;; (construct-feature-new {:type :movie :id "id" :year 1923 :title "title" :endyear 2013 :series "series" :season "season" :episode "episode"})
+;; (construct-feature {:type :movie :id "id" :year 1923 :title "title" :endyear 2013 :series "series" :season "season" :episode "episode"})
+;; (construct-feature {:type :episode :id "id" :year 1923 :title "title" :endyear 2013 :series "series" :season "season" :episode "episode"})
+
 (defn- construct-feature [feature]
-  [(merge {:db/id (d/tempid :db.part/user)}
+  (merge {:db/id (d/tempid :db.part/user)}
          (cr-attr-map :feature/type (:type feature))
          (cr-attr-map :feature/id (:id feature))
          (cr-attr-map :feature/title (:title feature))
          (cr-attr-map :feature/year (:year feature))
          (cr-attr-map :feature/endyear (:endyear feature))
-         (cr-attr-map :feature/series (:series feature))
          (cr-attr-map :feature/season (:season feature))
-         (cr-attr-map :feature/episode (:episode feature)))])
+         (cr-attr-map :feature/episode (:episode feature))
+         (feature-series feature)))
 
 ;; Формат файла:
 ;; { :type  =>   :series | :episode | :movie | :video | :tv-movie | :videogame
@@ -105,18 +115,26 @@
 ;;   :episode => long, only for episode, optional. Episode number
 ;; }
 ;; hint: воспользуйтесь lookup refs чтобы ссылаться на features по внешнему :id
-;; TODO каким образом нужно воспользоваться lookup refs не очень понятно.
-;; Это либо очевидно и подругому сделать нельзя, или я что-то не понимаю.
+
 (defn import []
-  (let [count-imported-features (atom 0)]
+  (let [count-imported-features (atom 0)
+        episodes []]
     (with-open [rdr (io/reader "features.2014.edn")]
       (doseq [line (line-seq rdr)
-            :let [feature (edn/read-string line)]]
-        (d/transact conn (construct-feature feature))
-         (swap! count-imported-features inc)))
+            :let [feature (edn/read-string line)]
+            :let [edn-feature (construct-feature feature)]]
+        (if (= :episode (:feature/type edn-feature))
+          (conj episodes edn-feature)
+          (d/transact conn [edn-feature]))
+        (swap! count-imported-features inc)))
+    (d/transact conn episodes)
     (print "Imported " @count-imported-features " features")))
 ;;(time (reset))
 ;;(time (import))
+;; (let [episodes (atom [])]
+;;   (swap! episodes conj 1)
+;;   (swap! episodes conj 2)
+;;   @episodes)
 ;; Найти все пары entity указанных типов с совпадающими названиями
 ;; Например, фильм + игра с одинаковым title
 ;; Вернуть #{[id1 id2], ...}
@@ -137,16 +155,14 @@
 (defn order-types-by-count [db type1 type2]
   (let [type1-count (count-features-by-type db type1)
         type2-count (count-features-by-type db type2)]
-    (if (> type1-count type2-count) ;; [type2 type1 true]
-        [type1 type2 false]
-        [type1 type2 false]
+    (if (> type1-count type2-count)
+       [type2 type1 true]
+       [type1 type2 false])))
+;; (order-types-by-count (db) :movie :videogame) ;; => [:videogame :movie :true]
+;; (order-types-by-count (db) :videogame :movie) ;; => [:videogame :movie :false]
 
-)))
-;; (order-types-by-count :movie :videogame) ;; => [:videogame :movie :true]
-;; (order-types-by-count :videogame :movie) ;; => [:videogame :movie :false]
-
-;; (count-features-by-type :movie) ;; => 20929
-;; (count-features-by-type :videogame) ;; => 153
+;; (count-features-by-type (db) :movie) ;; => 20929
+;; (count-features-by-type (db) :videogame) ;; => 153
 ;; (siblings (db) :videogame :movie)
 ;; Without optimization it works: "Elapsed time: 174340.860044 msecs"
 ;; With optimization it works: "Elapsed time: 1439.45947 msecs"
@@ -218,8 +234,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; longest-season
-(defn get-episode-by-id [db episode-id]
-  (d/q '[:find ?]))
 
 (defn eid [db feature-id]
   (->> (d/q '[:find ?id
@@ -247,8 +261,7 @@
          [?f :feature/series ?series-id]
          [?f :feature/episode ?episode]]
        db series-id)
-      (sort-by second >))
-  )
+      (sort-by second >)))
 
 (defn count-episodes-by-season-in-series [db series-id]
   (d/q '[:find ?season (count ?episode) ?series-id
@@ -277,7 +290,8 @@
   (d/q '[:find ?series-id ?season (count ?f)
          :where
          [?f :feature/season ?season]
-         [?f :feature/series ?series-id]]
+         [?f :feature/series ?s]
+         [?s :feature/id ?series-id]]
        db))
 ;; (print (count-episodes-by-season (db)))
 ;; Найти 3 сериала с наибольшим количеством серий в сезоне
